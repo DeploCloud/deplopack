@@ -27,6 +27,7 @@ const (
 
 type GenerateBuildPlanOptions struct {
 	RailpackVersion          string
+	Provider                 string
 	BuildCommand             string
 	StartCommand             string
 	PreviousVersions         map[string]string
@@ -91,6 +92,9 @@ func GenerateBuildPlan(app *app.App, env *app.Environment, options *GenerateBuil
 
 	// Figure out what providers to use
 	providerToUse, detectedProviderName := getProviders(ctx, config)
+	if options.Provider != "" && providerToUse == nil {
+		return failedBuildResult(logger, fmt.Errorf("failed to initialize selected provider %q", options.Provider))
+	}
 	ctx.Metadata.Set("providers", detectedProviderName)
 
 	// TODO: We should indicate if we have packages specified in the config
@@ -214,6 +218,13 @@ func GetConfig(app *app.App, env *app.Environment, options *GenerateBuildPlanOpt
 	}
 
 	mergedConfig := c.Merge(optionsConfig, envConfig, fileConfig)
+	// An explicit deployment selection takes precedence over repository configuration.
+	if options.Provider != "" {
+		if providers.GetProvider(options.Provider) == nil {
+			return nil, fmt.Errorf("unknown provider %q", options.Provider)
+		}
+		mergedConfig.Provider = &options.Provider
+	}
 	// Environment-provided secrets must remain available when file configuration replaces slice values.
 	mergedConfig.Secrets = utils.RemoveDuplicates(slices.Concat(envConfig.Secrets, mergedConfig.Secrets))
 

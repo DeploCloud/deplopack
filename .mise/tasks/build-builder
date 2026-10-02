@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Build the standalone builder binary"
+set -euo pipefail
+mkdir -p bin
+go build -o bin/deplopack-builder ./cmd/builder

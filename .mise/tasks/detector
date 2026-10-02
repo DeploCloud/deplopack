@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+#MISE description="Run the standalone repository detector"
+set -euo pipefail
+go run ./cmd/detector "$@"

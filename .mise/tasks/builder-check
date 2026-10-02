@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+#MISE description="Verify builder environment inputs and provider selection without BuildKit"
+set -euo pipefail
+mkdir -p tmp
+go build -o tmp/deplopack-builder ./cmd/builder
+python3 - <<'PY'
+import json
+import os
+import subprocess
+import tempfile
+from pathlib import Path
+
+binary = str(Path('tmp/deplopack-builder').resolve())
+
+with tempfile.TemporaryDirectory(dir='tmp') as directory:
+    root = Path(directory)
+    env = {
+        'PATH': os.environ['PATH'],
+        'HOME': os.environ['HOME'],
+        'NO_COLOR': '1',
+        'DEPLOPACK_PROVIDER': 'shell',
+        'DEPLOPACK_SHOW_PLAN': 'true',
+        'EMPTY_VALUE': '',
+        'APP_SECRET': 'private=value\nsecond line',
+    }
+
+    def invoke(variables, *args):
+        return subprocess.run([binary, *args], cwd=root, env=variables,
+                              capture_output=True, text=True, timeout=60)
+
+    def plan(variables):
+        result = invoke(variables)
+        # BuildKit is intentionally absent; consume the plan produced before connection.
+        assert result.returncode == 1, result.returncode
+        start = result.stdout.find('{\n')
+        assert start >= 0, 'No generated plan'
+        return json.JSONDecoder().raw_decode(result.stdout[start:])[0]
+
+    assert invoke(env, '--version').returncode == 0
+    assert invoke(env, '.').returncode != 0
+    assert invoke({key: value for key, value in env.items()
+                   if key != 'DEPLOPACK_PROVIDER'}).returncode != 0
+    assert invoke({**env, 'DEPLOPACK_PROVIDER': 'unknown'}).returncode != 0
+    assert invoke(env).returncode != 0  # Selected shell provider cannot initialize.
+    (root / 'start.sh').write_text('#!/bin/sh\necho hello\n')
+    (root / 'main.py').write_text('print("other provider")\n')
+    (root / 'railpack.json').write_text('{"provider":"python"}')
+    generated = plan(env)
+    assert generated['deploy']['startCommand'] == 'sh start.sh', generated
+    assert 'EMPTY_VALUE' in generated['secrets'], generated
+    assert 'APP_SECRET' in generated['secrets'], generated
+    assert not any(key.startswith('DEPLOPACK_') for key in generated['secrets'])
+    assert 'private=value' not in json.dumps(generated), 'Secret value in plan'
+    custom = plan({**env, 'DEPLOPACK_START_COMMAND': 'sh custom.sh',
+                   'DEPLOPACK_BUILD_COMMAND': 'echo custom-build'})
+    assert custom['deploy']['startCommand'] == 'sh custom.sh', custom
+    assert 'echo custom-build' in json.dumps(custom['steps']), custom
+print('Builder checks passed')
+PY

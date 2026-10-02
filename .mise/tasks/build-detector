@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Build the standalone detector binary"
+set -euo pipefail
+mkdir -p bin
+go build -o bin/deplopack-detector ./cmd/detector
