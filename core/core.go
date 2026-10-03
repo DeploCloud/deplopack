@@ -90,10 +90,21 @@ func GenerateBuildPlan(app *app.App, env *app.Environment, options *GenerateBuil
 		}
 	}
 
-	// Figure out what providers to use
-	providerToUse, detectedProviderName := getProviders(ctx, config)
-	if options.Provider != "" && providerToUse == nil {
-		return failedBuildResult(logger, fmt.Errorf("failed to initialize selected provider %q", options.Provider))
+	var providerToUse providers.Provider
+	var detectedProviderName string
+	if options.Provider != "" {
+		// Deployment selection is authoritative; skip the general provider search.
+		providerToUse = providers.GetProvider(options.Provider)
+		if providerToUse == nil {
+			return failedBuildResult(logger, fmt.Errorf("unknown provider %q", options.Provider))
+		}
+		if err := providerToUse.Initialize(ctx); err != nil {
+			return failedBuildResult(logger, fmt.Errorf("failed to initialize selected provider %q: %w", options.Provider, err))
+		}
+		detectedProviderName = providerToUse.Name()
+		logger.LogInfo("Using selected provider %s", utils.CapitalizeFirst(detectedProviderName))
+	} else {
+		providerToUse, detectedProviderName = getProviders(ctx, config)
 	}
 	ctx.Metadata.Set("providers", detectedProviderName)
 
@@ -217,13 +228,16 @@ func GetConfig(app *app.App, env *app.Environment, options *GenerateBuildPlanOpt
 		return nil, err
 	}
 
-	mergedConfig := c.Merge(optionsConfig, envConfig, fileConfig)
+	var mergedConfig *c.Config
 	// An explicit deployment selection takes precedence over repository configuration.
 	if options.Provider != "" {
 		if providers.GetProvider(options.Provider) == nil {
 			return nil, fmt.Errorf("unknown provider %q", options.Provider)
 		}
+		mergedConfig = c.Merge(optionsConfig, fileConfig, envConfig)
 		mergedConfig.Provider = &options.Provider
+	} else {
+		mergedConfig = c.Merge(optionsConfig, envConfig, fileConfig)
 	}
 	// Environment-provided secrets must remain available when file configuration replaces slice values.
 	mergedConfig.Secrets = utils.RemoveDuplicates(slices.Concat(envConfig.Secrets, mergedConfig.Secrets))
