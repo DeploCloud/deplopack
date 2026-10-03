@@ -67,6 +67,7 @@ type MiseStepBuilder struct {
 	env                   *a.Environment
 	// nil = not yet computed, non-nil = cached result (may be an empty slice)
 	supportingMiseConfigFiles *[]string
+	packageVersions           map[string]*MisePackageInfo
 }
 
 func (c *GenerateContext) NewMiseStepBuilder(displayName string) *MiseStepBuilder {
@@ -147,6 +148,9 @@ func (b *MiseStepBuilder) SkipMiseInstall(name resolver.PackageRef) {
 // GetMisePackageVersions gets all package versions from mise that are defined in the app directory environment
 // this can include additional packages defined outside the app directory, but we filter those out
 func (b *MiseStepBuilder) GetMisePackageVersions(ctx *GenerateContext) (map[string]*MisePackageInfo, error) {
+	if b.packageVersions != nil {
+		return b.packageVersions, nil
+	}
 	miseInstance, err := mise.New(mise.InstallDir)
 	if err != nil {
 		return nil, err
@@ -195,6 +199,7 @@ func (b *MiseStepBuilder) GetMisePackageVersions(ctx *GenerateContext) (map[stri
 		}
 	}
 
+	b.packageVersions = packages
 	return packages, nil
 }
 
