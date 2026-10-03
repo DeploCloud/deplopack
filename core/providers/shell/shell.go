@@ -107,8 +107,6 @@ func getScript(ctx *generate.GenerateContext) string {
 
 	if envVarName != "" {
 		ctx.Logger.LogWarn("%s %s script not found", envVarName, scriptName)
-	} else {
-		ctx.Logger.LogWarn("script %s not found", scriptName)
 	}
 
 	return ""

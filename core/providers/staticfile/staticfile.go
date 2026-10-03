@@ -46,6 +46,11 @@ func (p *StaticfileProvider) Detect(ctx *generate.GenerateContext) (bool, error)
 	return false, nil
 }
 
+// Exposes the serving directory using the same rules as detection and planning.
+func (p *StaticfileProvider) RootDir(ctx *generate.GenerateContext) (string, error) {
+	return getRootDir(ctx)
+}
+
 func (p *StaticfileProvider) Plan(ctx *generate.GenerateContext) error {
 	rootDir, err := getRootDir(ctx)
 	if err != nil {

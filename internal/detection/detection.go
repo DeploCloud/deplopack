@@ -13,11 +13,13 @@ import (
 	"github.com/railwayapp/railpack/core/logger"
 	"github.com/railwayapp/railpack/core/plan"
 	"github.com/railwayapp/railpack/core/providers"
+	"github.com/railwayapp/railpack/core/providers/staticfile"
 )
 
 type Detection struct {
-	Type string `json:"type"`
-	Path string `json:"path,omitempty"`
+	Type    string `json:"type"`
+	Path    string `json:"path,omitempty"`
+	RootDir string `json:"rootDir,omitempty"`
 }
 
 type Result struct {
@@ -57,7 +59,16 @@ func Analyze(source *app.App, env *app.Environment, options *core.GenerateBuildP
 			continue
 		}
 		if matched {
-			result.Detections = append(result.Detections, Detection{Type: provider.Name()})
+			detection := Detection{Type: provider.Name()}
+			if staticProvider, ok := provider.(*staticfile.StaticfileProvider); ok {
+				rootDir, err := staticProvider.RootDir(ctx)
+				if err != nil {
+					logs.LogError("Failed to resolve staticfile root: %s", err)
+					continue
+				}
+				detection.RootDir = rootDir
+			}
+			result.Detections = append(result.Detections, detection)
 		}
 	}
 	// File detections stay outside the upstream language registry.
