@@ -13,7 +13,7 @@ func FromEnviron(variables []string) *app.Environment {
 	for _, variable := range variables {
 		name, value, _ := strings.Cut(variable, "=")
 		switch name {
-		case "DEPLOPACK_PROVIDER", "BUILDKIT_HOST", "DOCKER_HOST", "DOCKER_CONFIG":
+		case "DEPLOPACK_PROVIDER", "BUILDKIT_HOST", "DOCKER_HOST", "DOCKER_CONFIG", "PATH", "HOME":
 			continue
 		}
 		if suffix, ok := strings.CutPrefix(name, "DEPLOPACK_"); ok {
