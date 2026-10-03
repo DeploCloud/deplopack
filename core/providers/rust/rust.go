@@ -35,6 +35,19 @@ func (p *RustProvider) Initialize(ctx *generate.GenerateContext) error {
 	return nil
 }
 
+// Reads declared Cargo constraints without fetching toolchains or dependencies.
+func (p *RustProvider) Inspect(ctx *generate.GenerateContext) error {
+	manifest, err := parseCargoTOML(ctx)
+	if err != nil {
+		return err
+	}
+	ctx.Metadata.Set("rustPackageManager", "cargo")
+	if manifest != nil {
+		ctx.Metadata.Set("rustVersionConstraint", manifest.Package.RustVersion)
+	}
+	return nil
+}
+
 func (p *RustProvider) Plan(ctx *generate.GenerateContext) error {
 	miseStep := ctx.GetMiseStepBuilder()
 	p.InstallMisePackages(ctx, miseStep)

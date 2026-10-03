@@ -40,6 +40,19 @@ func (p *ElixirProvider) Initialize(ctx *generate.GenerateContext) error {
 	return nil
 }
 
+// Reads local runtime declarations without resolving compatible OTP releases.
+func (p *ElixirProvider) Inspect(ctx *generate.GenerateContext) error {
+	ctx.Metadata.Set("elixirPackageManager", "mix")
+	for filename, key := range map[string]string{
+		".elixir-version": "elixirVersionConstraint", ".erlang-version": "erlangVersionConstraint",
+	} {
+		if contents, err := ctx.App.ReadFile(filename); err == nil {
+			ctx.Metadata.Set(key, strings.TrimSpace(contents))
+		}
+	}
+	return nil
+}
+
 func (p *ElixirProvider) Plan(ctx *generate.GenerateContext) error {
 	miseStep := ctx.GetMiseStepBuilder()
 	// ELIXIR_ERL_OPTIONS can impact the install process, so we should use the same set of variables during the mise stage

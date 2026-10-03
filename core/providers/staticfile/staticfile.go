@@ -37,6 +37,16 @@ func (p *StaticfileProvider) Initialize(ctx *generate.GenerateContext) error {
 	return nil
 }
 
+// Shares the static server startup command with local inspection.
+func (p *StaticfileProvider) Inspect(ctx *generate.GenerateContext) error {
+	ctx.Metadata.Set("startCommand", p.startCommand())
+	return nil
+}
+
+func (p *StaticfileProvider) startCommand() string {
+	return fmt.Sprintf("caddy run --config %s --adapter caddyfile 2>&1", CaddyfilePath)
+}
+
 func (p *StaticfileProvider) Detect(ctx *generate.GenerateContext) (bool, error) {
 	_, err := getRootDir(ctx)
 	if err == nil {
@@ -83,7 +93,7 @@ func (p *StaticfileProvider) Plan(ctx *generate.GenerateContext) error {
 		}),
 	})
 
-	ctx.Deploy.StartCmd = fmt.Sprintf("caddy run --config %s --adapter caddyfile 2>&1", CaddyfilePath)
+	ctx.Deploy.StartCmd = p.startCommand()
 
 	return nil
 }

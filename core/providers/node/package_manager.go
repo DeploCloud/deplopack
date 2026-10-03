@@ -163,11 +163,6 @@ func (p PackageManager) installDeps(ctx *generate.GenerateContext, install *gene
 
 		// ideally, `npm ci` should be used instead of `npm install`, but we default to npm install to avoid build failures
 		// https://github.com/railwayapp/railpack/pull/643
-		installCmd := "npm install"
-		if customInstallCmd, _ := ctx.Env.GetConfigVariable("NODE_NPM_INSTALL"); customInstallCmd != "" {
-			installCmd = customInstallCmd
-		}
-		install.AddCommand(plan.NewExecCommand(installCmd))
 	case PackageManagerPnpm:
 		install.AddEnvVars(map[string]string{
 			"PNPM_HOME":      PNPM_HOME,
@@ -197,19 +192,36 @@ func (p PackageManager) installDeps(ctx *generate.GenerateContext, install *gene
 			install.AddCommand(plan.NewExecCommand("pnpm add -g node-gyp"))
 		}
 
-		if ctx.App.HasFile("pnpm-lock.yaml") {
-			install.AddCommand(plan.NewExecCommand("pnpm install --frozen-lockfile --prefer-offline"))
-		} else {
+		if !ctx.App.HasFile("pnpm-lock.yaml") {
 			ctx.Logger.LogSuggestion("Add a `pnpm-lock.yaml` for more deterministic installs", "/architecture/recommendations")
-			install.AddCommand(plan.NewExecCommand("pnpm install"))
 		}
-	case PackageManagerBun:
-		install.AddCommand(plan.NewExecCommand("bun install --frozen-lockfile"))
-	case PackageManagerYarn1:
-		install.AddCommand(plan.NewExecCommand("yarn install --frozen-lockfile"))
-	case PackageManagerYarnBerry:
-		install.AddCommand(plan.NewExecCommand("yarn install --check-cache"))
 	}
+	if command := p.dependencyInstallCommand(ctx); command != "" {
+		install.AddCommand(plan.NewExecCommand(command))
+	}
+}
+
+// Shares the dependency command between planning and local inspection.
+func (p PackageManager) dependencyInstallCommand(ctx *generate.GenerateContext) string {
+	switch p {
+	case PackageManagerNpm:
+		if command, _ := ctx.Env.GetConfigVariable("NODE_NPM_INSTALL"); command != "" {
+			return command
+		}
+		return "npm install"
+	case PackageManagerPnpm:
+		if ctx.App.HasFile("pnpm-lock.yaml") {
+			return "pnpm install --frozen-lockfile --prefer-offline"
+		}
+		return "pnpm install"
+	case PackageManagerBun:
+		return "bun install --frozen-lockfile"
+	case PackageManagerYarn1:
+		return "yarn install --frozen-lockfile"
+	case PackageManagerYarnBerry:
+		return "yarn install --check-cache"
+	}
+	return ""
 }
 
 // pnpm < 11 used PNPM_HOME for bins; pnpm 11+ uses a "bin" subdirectory within PNPM_HOME

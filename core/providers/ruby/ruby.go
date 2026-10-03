@@ -28,6 +28,18 @@ func (p *RubyProvider) Initialize(ctx *generate.GenerateContext) error {
 	return nil
 }
 
+// Exposes existing local Ruby metadata and startup conventions to the detector.
+func (p *RubyProvider) Inspect(ctx *generate.GenerateContext) error {
+	p.addMetadata(ctx)
+	ctx.Metadata.Set("rubyPackageManager", "bundler")
+	ctx.Metadata.Set("rubyVersionConstraint", parseVersionFromGemfile(ctx))
+	if contents, err := ctx.App.ReadFile(".ruby-version"); err == nil {
+		ctx.Metadata.Set("rubyVersionConstraint", strings.TrimSpace(contents))
+	}
+	ctx.Metadata.Set("startCommand", p.GetStartCommand(ctx))
+	return nil
+}
+
 func (p *RubyProvider) Detect(ctx *generate.GenerateContext) (bool, error) {
 	hasRuby := ctx.App.HasFile("Gemfile")
 	return hasRuby, nil

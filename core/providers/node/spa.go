@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	DefaultCaddyfilePath = "/Caddyfile"
-	OUTPUT_DIR_VAR       = "SPA_OUTPUT_DIR"
+	DefaultCaddyfilePath   = "/Caddyfile"
+	OUTPUT_DIR_VAR         = "SPA_OUTPUT_DIR"
+	defaultSPAStartCommand = "caddy run --config /Caddyfile --adapter caddyfile 2>&1"
 )
 
 //go:embed Caddyfile.template
@@ -129,7 +130,7 @@ func (p *NodeProvider) DeploySPA(ctx *generate.GenerateContext, build *generate.
 		"Caddyfile": caddyfileTemplate.Contents,
 	}
 
-	ctx.Deploy.StartCmd = fmt.Sprintf("caddy run --config %s --adapter caddyfile 2>&1", DefaultCaddyfilePath)
+	ctx.Deploy.StartCmd = defaultSPAStartCommand
 
 	ctx.Deploy.AddInputs([]plan.Layer{
 		installCaddyStep.GetLayer(),

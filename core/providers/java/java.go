@@ -21,6 +21,12 @@ func (p *JavaProvider) Initialize(ctx *generate.GenerateContext) error {
 	return nil
 }
 
+// Reuses local build system and framework detection without JDK resolution.
+func (p *JavaProvider) Inspect(ctx *generate.GenerateContext) error {
+	p.addMetadata(ctx)
+	return nil
+}
+
 func (p *JavaProvider) CleansePlan(buildPlan *plan.BuildPlan) {}
 
 func (p *JavaProvider) StartCommandHelp() string {

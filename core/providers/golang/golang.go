@@ -10,10 +10,11 @@ import (
 )
 
 const (
-	DEFAULT_GO_VERSION = "1.25"
-	GO_BUILD_CACHE_KEY = "go-build"
-	GO_BINARY_NAME     = "out"
-	GO_PATH            = "/go"
+	DEFAULT_GO_VERSION  = "1.25"
+	GO_BUILD_CACHE_KEY  = "go-build"
+	GO_BINARY_NAME      = "out"
+	GO_PATH             = "/go"
+	goModInstallCommand = "go mod download"
 )
 
 type GoProvider struct{}
@@ -27,6 +28,16 @@ func (p *GoProvider) Detect(ctx *generate.GenerateContext) (bool, error) {
 }
 
 func (p *GoProvider) Initialize(ctx *generate.GenerateContext) error {
+	return nil
+}
+
+// Reports local module metadata without fetching modules or resolving Go releases.
+func (p *GoProvider) Inspect(ctx *generate.GenerateContext) error {
+	p.addMetadata(ctx)
+	if p.isGoMod(ctx) || p.isGoWorkspace(ctx) {
+		ctx.Metadata.Set("installCommand", goModInstallCommand)
+	}
+	ctx.Metadata.Set("goVersionConstraint", p.extractGoVersionFromMod(ctx))
 	return nil
 }
 
@@ -148,7 +159,7 @@ func (p *GoProvider) InstallGoDeps(ctx *generate.GenerateContext, install *gener
 		}
 	}
 
-	install.AddCommand(plan.NewExecCommand("go mod download"))
+	install.AddCommand(plan.NewExecCommand(goModInstallCommand))
 
 	ctx.Logger.LogInfo("Using go mod")
 

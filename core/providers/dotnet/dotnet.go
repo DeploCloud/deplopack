@@ -35,6 +35,40 @@ func (p *DotnetProvider) Initialize(ctx *generate.GenerateContext) error {
 	return nil
 }
 
+// Reuses SDK declaration precedence without resolving or installing .NET.
+func (p *DotnetProvider) Inspect(ctx *generate.GenerateContext) error {
+	files, err := ctx.App.FindFiles("*.csproj")
+	if err != nil {
+		return err
+	}
+	if len(files) > 0 {
+		contents, err := ctx.App.ReadFile(files[0])
+		if err != nil {
+			return err
+		}
+		// The planning method prints XML errors on stdout; reject them before calling it.
+		var project Project
+		if err := xml.Unmarshal([]byte(contents), &project); err != nil {
+			return fmt.Errorf("parse %s: %w", files[0], err)
+		}
+	}
+	if ctx.App.HasFile("global.json") {
+		var global *CSharpGlobalJSON
+		if err := ctx.App.ReadJSON("global.json", &global); err != nil {
+			return err
+		}
+		if global == nil {
+			return fmt.Errorf("global.json must contain an object")
+		}
+	}
+	p.InstallMisePackages(ctx, ctx.GetMiseStepBuilder())
+	if pkg := ctx.Resolver.Get("dotnet"); pkg != nil {
+		ctx.Metadata.Set("dotnetVersionConstraint", pkg.Version)
+	}
+	ctx.Metadata.Set("startCommand", p.GetStartCommand(ctx))
+	return nil
+}
+
 func (p *DotnetProvider) Plan(ctx *generate.GenerateContext) error {
 	miseStep := ctx.GetMiseStepBuilder()
 	p.InstallMisePackages(ctx, miseStep)

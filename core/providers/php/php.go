@@ -56,6 +56,18 @@ func (p *PhpProvider) Initialize(ctx *generate.GenerateContext) error {
 	return nil
 }
 
+// Reads PHP serving conventions without contacting the container registry.
+func (p *PhpProvider) Inspect(ctx *generate.GenerateContext) error {
+	ctx.Metadata.Set("phpPackageManager", "composer")
+	ctx.Metadata.SetBool("phpLaravel", p.usesLaravel(ctx))
+	rootDir := "/app"
+	if p.usesLaravel(ctx) {
+		rootDir = "/app/public"
+	}
+	ctx.Metadata.Set("phpRootDirectory", rootDir)
+	return nil
+}
+
 func (p *PhpProvider) Plan(ctx *generate.GenerateContext) error {
 	phpImageStep, err := p.phpImagePackage(ctx)
 	if err != nil {

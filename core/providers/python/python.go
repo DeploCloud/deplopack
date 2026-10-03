@@ -20,6 +20,11 @@ const (
 	LOCAL_BIN_PATH         = "/root/.local/bin"
 	PLAYWRIGHT_CACHE_DIR   = "/root/.cache/ms-playwright"
 	PLAYWRIGHT_INSTALL_VAR = "PYTHON_PLAYWRIGHT_INSTALL"
+	uvInstallCommand       = "uv sync --locked --no-dev --no-install-project"
+	uvBuildCommand         = "uv sync --locked --no-dev --no-editable"
+	pdmInstallCommand      = "pdm install --check --prod --no-editable"
+	poetryInstallCommand   = "poetry install --no-interaction --no-ansi --only main --no-root"
+	pipInstallCommand      = "pip install -r requirements.txt"
 )
 
 // Keep this aligned with Playwright's Chromium deps in nativeDeps.ts:
@@ -58,6 +63,41 @@ func (p *PythonProvider) Initialize(ctx *generate.GenerateContext) error {
 	return nil
 }
 
+// Reads framework, package manager and startup conventions without resolving tools.
+func (p *PythonProvider) Inspect(ctx *generate.GenerateContext) error {
+	p.addMetadata(ctx)
+	// Browser installation adds commands beyond dependency installation.
+	if !ctx.Env.IsConfigVariableTruthy(PLAYWRIGHT_INSTALL_VAR) {
+		switch {
+		case p.hasRequirements(ctx):
+			ctx.Metadata.Set("installCommand", fmt.Sprintf("python -m venv %s && %s/bin/%s", VENV_PATH, VENV_PATH, pipInstallCommand))
+		case p.hasPyproject(ctx) && p.hasUv(ctx):
+			ctx.Metadata.Set("installCommand", uvInstallCommand)
+			ctx.Metadata.Set("buildCommand", uvBuildCommand)
+		case p.hasPyproject(ctx) && p.hasPoetry(ctx):
+			ctx.Metadata.Set("installCommand", poetryInstallCommand)
+		case p.hasPyproject(ctx) && p.hasPdm(ctx):
+			ctx.Metadata.Set("installCommand", pdmInstallCommand)
+		case p.hasPipfile(ctx):
+			ctx.Metadata.Set("installCommand", p.pipenvInstallCommand(ctx))
+		}
+	}
+	if contents, err := ctx.App.ReadFile(".python-version"); err == nil {
+		ctx.Metadata.Set("pythonVersionConstraint", strings.TrimSpace(contents))
+	}
+	ctx.Metadata.Set("startCommand", p.GetStartCommand(ctx))
+	if p.isDjango(ctx) {
+		ctx.Metadata.Set("djangoAppName", p.getDjangoAppName(ctx))
+	}
+	if version, _ := parseVersionFromPipfile(ctx); version != "" {
+		ctx.Metadata.Set("pythonVersionConstraint", version)
+	}
+	if contents, err := ctx.App.ReadFile("runtime.txt"); err == nil {
+		ctx.Metadata.Set("pythonVersionConstraint", utils.ExtractSemverVersion(contents))
+	}
+	return nil
+}
+
 func (p *PythonProvider) Detect(ctx *generate.GenerateContext) (bool, error) {
 	hasPython := p.getMainPythonFile(ctx) != "" ||
 		p.hasRequirements(ctx) ||
@@ -85,7 +125,7 @@ func (p *PythonProvider) Plan(ctx *generate.GenerateContext) error {
 		installOutputs = p.InstallUv(ctx, install)
 		build.AddCommands([]plan.Command{
 			// the project is not installed during the install phase, because it requires the project source
-			plan.NewExecCommand("uv sync --locked --no-dev --no-editable"),
+			plan.NewExecCommand(uvBuildCommand),
 		})
 	} else if p.hasPyproject(ctx) && p.hasPoetry(ctx) {
 		installOutputs = p.InstallPoetry(ctx, install)
@@ -211,7 +251,7 @@ func (p *PythonProvider) InstallUv(ctx *generate.GenerateContext, install *gener
 		// if we exclude workspace packages, uv.lock will fail the frozen test and the user will get an error
 		// to avoid this, we (a) detect if workspace packages are required (b) if they aren't, we don't include project
 		// source in order to optimize layer caching (c) install project in the build phase.
-		plan.NewExecCommand("uv sync --locked --no-dev --no-install-project"),
+		plan.NewExecCommand(uvInstallCommand),
 	}
 
 	install.AddCommands(installCommands)
@@ -238,12 +278,12 @@ func (p *PythonProvider) InstallPipenv(ctx *generate.GenerateContext, install *g
 		install.AddCommands([]plan.Command{
 			plan.NewCopyCommand("Pipfile"),
 			plan.NewCopyCommand("Pipfile.lock"),
-			plan.NewExecCommand("pipenv install --deploy --ignore-pipfile"),
+			plan.NewExecCommand(p.pipenvInstallCommand(ctx)),
 		})
 	} else {
 		install.AddCommands([]plan.Command{
 			plan.NewCopyCommand("Pipfile"),
-			plan.NewExecCommand("pipenv install --skip-lock"),
+			plan.NewExecCommand(p.pipenvInstallCommand(ctx)),
 		})
 	}
 
@@ -262,7 +302,7 @@ func (p *PythonProvider) InstallPDM(ctx *generate.GenerateContext, install *gene
 	installCommands := []plan.Command{
 		plan.NewPathCommand(LOCAL_BIN_PATH),
 		plan.NewPathCommand(VENV_PATH + "/bin"),
-		plan.NewExecCommand("pdm install --check --prod --no-editable"),
+		plan.NewExecCommand(pdmInstallCommand),
 	}
 
 	install.AddCommands(installCommands)
@@ -284,7 +324,7 @@ func (p *PythonProvider) InstallPoetry(ctx *generate.GenerateContext, install *g
 	installCommands := []plan.Command{
 		plan.NewPathCommand(LOCAL_BIN_PATH),
 		plan.NewPathCommand(VENV_PATH + "/bin"),
-		plan.NewExecCommand("poetry install --no-interaction --no-ansi --only main --no-root"),
+		plan.NewExecCommand(poetryInstallCommand),
 	}
 
 	install.AddCommands(installCommands)
@@ -308,7 +348,7 @@ func (p *PythonProvider) InstallPip(ctx *generate.GenerateContext, install *gene
 	})
 	p.copyInstallFiles(ctx, install)
 	install.AddCommands([]plan.Command{
-		plan.NewExecCommand("pip install -r requirements.txt"),
+		plan.NewExecCommand(pipInstallCommand),
 	})
 
 	return []string{VENV_PATH}
@@ -334,6 +374,13 @@ func (p *PythonProvider) AddRuntimeDeps(ctx *generate.GenerateContext) {
 	if p.usesMysql(ctx) {
 		ctx.Deploy.AddAptPackages([]string{"default-mysql-client"})
 	}
+}
+
+func (p *PythonProvider) pipenvInstallCommand(ctx *generate.GenerateContext) string {
+	if ctx.App.HasFile("Pipfile.lock") {
+		return "pipenv install --deploy --ignore-pipfile"
+	}
+	return "pipenv install --skip-lock"
 }
 
 func (p *PythonProvider) GetBuilderDeps(ctx *generate.GenerateContext) *generate.MiseStepBuilder {

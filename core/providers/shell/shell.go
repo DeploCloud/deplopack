@@ -34,6 +34,21 @@ func (p *ShellProvider) Initialize(ctx *generate.GenerateContext) error {
 	return nil
 }
 
+// Reads the startup script and shebang without executing the script.
+func (p *ShellProvider) Inspect(ctx *generate.GenerateContext) error {
+	if err := p.Initialize(ctx); err != nil {
+		return err
+	}
+	interpreter, err := detectShellInterpreter(ctx, p.scriptName)
+	if err != nil {
+		return err
+	}
+	ctx.Metadata.Set("shellScript", p.scriptName)
+	ctx.Metadata.Set("detectedShellInterpreter", interpreter)
+	ctx.Metadata.Set("startCommand", interpreter+" "+p.scriptName)
+	return nil
+}
+
 func (p *ShellProvider) Plan(ctx *generate.GenerateContext) error {
 	interpreter, err := detectShellInterpreter(ctx, p.scriptName)
 	if err != nil {

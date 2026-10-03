@@ -31,6 +31,15 @@ func (p *DenoProvider) Initialize(ctx *generate.GenerateContext) error {
 	return nil
 }
 
+// Finds the local entrypoint without executing Deno.
+func (p *DenoProvider) Inspect(ctx *generate.GenerateContext) error {
+	if err := p.Initialize(ctx); err != nil {
+		return err
+	}
+	ctx.Metadata.Set("startCommand", p.GetStartCommand(ctx))
+	return nil
+}
+
 func (p *DenoProvider) Plan(ctx *generate.GenerateContext) error {
 	miseStep := ctx.GetMiseStepBuilder()
 	p.InstallMisePackages(ctx, miseStep)
