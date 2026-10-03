@@ -5,16 +5,11 @@ package cli
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
-	"fmt"
 	"os"
-	"strings"
 
 	"github.com/railwayapp/railpack/buildkit"
 	"github.com/railwayapp/railpack/core"
-	"github.com/railwayapp/railpack/core/app"
-	"github.com/railwayapp/railpack/core/plan"
 	"github.com/urfave/cli/v3"
 )
 
@@ -100,12 +95,12 @@ var BuildCommand = &cli.Command{
 			core.PrettyPrintJSON(os.Stdout, serializedPlan)
 		}
 
-		err = validateSecrets(buildResult.Plan, env)
+		err = buildkit.ValidateSecrets(buildResult.Plan, env)
 		if err != nil {
 			return cli.Exit(err, ExitCodeFailure)
 		}
 
-		secretsHash := getSecretsHash(env)
+		secretsHash := buildkit.GetSecretsHash(env)
 
 		platformStr := cmd.String("platform")
 		err = buildkit.BuildWithBuildkitClient(app.Source, buildResult.Plan, buildkit.BuildWithBuildkitClientOptions{
@@ -129,25 +124,4 @@ var BuildCommand = &cli.Command{
 
 		return nil
 	},
-}
-
-// make sure all secrets referenced in the build plan are present in the environment
-func validateSecrets(plan *plan.BuildPlan, env *app.Environment) error {
-	for _, secret := range plan.Secrets {
-		if _, ok := env.Variables[secret]; !ok {
-			return fmt.Errorf("missing environment variable: %s. Please set using --env %s=%s", secret, secret, "...")
-		}
-	}
-	return nil
-}
-
-// generate a hash all of build secrets to invalidate all caches when any secret changes
-func getSecretsHash(env *app.Environment) string {
-	var secretsValue strings.Builder
-	for _, v := range env.Variables {
-		secretsValue.WriteString(v)
-	}
-	hasher := sha256.New()
-	hasher.Write([]byte(secretsValue.String()))
-	return fmt.Sprintf("%x", hasher.Sum(nil))
 }

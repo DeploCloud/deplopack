@@ -1,13 +1,18 @@
 package main
 
 import (
-	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
-	"github.com/railwayapp/railpack/cli"
-	urfave "github.com/urfave/cli/v3"
+	"github.com/railwayapp/railpack/buildkit"
+	"github.com/railwayapp/railpack/core"
+	"github.com/railwayapp/railpack/core/app"
+	"github.com/railwayapp/railpack/core/config"
+	"github.com/railwayapp/railpack/core/mise"
+	"github.com/railwayapp/railpack/core/plan"
+	"github.com/railwayapp/railpack/internal/deplopack"
 )
 
 var version = "dev"
@@ -19,10 +24,10 @@ func main() {
 	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		if exit, ok := err.(urfave.ExitCoder); ok {
-			os.Exit(exit.ExitCode())
+		if mise.IsTemporary(err) {
+			os.Exit(75)
 		}
-		os.Exit(cli.ExitCodeFailure)
+		os.Exit(1)
 	}
 }
 
@@ -30,40 +35,44 @@ func run() error {
 	if len(os.Args) != 1 {
 		return fmt.Errorf("builder accepts configuration through environment variables only")
 	}
-	if strings.TrimSpace(os.Getenv("DEPLOPACK_PROVIDER")) == "" {
+	provider := strings.TrimSpace(os.Getenv("DEPLOPACK_PROVIDER"))
+	if provider == "" {
 		return fmt.Errorf("DEPLOPACK_PROVIDER is required")
 	}
 
-	cli.Version = version
-	// Reuse upstream planning, secret validation, BuildKit execution and exit codes.
-	command := *cli.BuildCommand
-	command.Name = "deplopack-builder"
-	command.DisableSliceFlagSeparator = true
-	command.Flags = append(command.Flags, &urfave.StringFlag{Name: "provider"})
-	args := []string{command.Name, "--progress", "plain"}
-	for _, option := range []struct{ env, flag string }{
-		{"DEPLOPACK_PROVIDER", "provider"},
-		{"DEPLOPACK_BUILD_COMMAND", "build-cmd"},
-		{"DEPLOPACK_START_COMMAND", "start-cmd"},
-		{"DEPLOPACK_CONFIG_FILE", "config-file"},
-		{"DEPLOPACK_IMAGE_NAME", "name"},
-		{"DEPLOPACK_PLATFORM", "platform"},
-		{"DEPLOPACK_OUTPUT_DIR", "output"},
-	} {
-		if value := os.Getenv(option.env); value != "" {
-			args = append(args, "--"+option.flag, value)
-		}
+	source, err := app.NewApp(".")
+	if err != nil {
+		return err
 	}
-	for _, variable := range os.Environ() {
-		name, _, _ := strings.Cut(variable, "=")
-		if strings.HasPrefix(name, "DEPLOPACK_") || name == "BUILDKIT_HOST" || name == "DOCKER_HOST" || name == "DOCKER_CONFIG" {
-			continue
-		}
-		// Passing names preserves empty values without copying secrets into arguments.
-		args = append(args, "--env", name)
+	env := deplopack.FromEnviron(os.Environ())
+	// Call the upstream planner and BuildKit directly without registering CLI commands.
+	result, err := core.GenerateBuildPlan(source, env, &core.GenerateBuildPlanOptions{
+		RailpackVersion: version,
+		Provider:        provider,
+	})
+	if err != nil {
+		return err
 	}
-	if value, ok := os.LookupEnv("DEPLOPACK_SHOW_PLAN"); ok {
-		args = append(args, "--show-plan="+value)
+	core.PrettyPrintBuildResult(result, core.PrintOptions{Version: version})
+	if !result.Success {
+		return fmt.Errorf("build planning failed")
 	}
-	return command.Run(context.Background(), append(args, "."))
+	serialized, err := json.MarshalIndent(struct {
+		Schema string `json:"$schema"`
+		*plan.BuildPlan
+	}{Schema: config.SchemaUrl, BuildPlan: result.Plan}, "", "  ")
+	if err != nil {
+		return err
+	}
+	core.PrettyPrintSectionHeader(os.Stdout, "Generated railpack-plan.json")
+	core.PrettyPrintJSON(os.Stdout, serialized)
+	if err := buildkit.ValidateSecrets(result.Plan, env); err != nil {
+		return err
+	}
+	return buildkit.BuildWithBuildkitClient(source.Source, result.Plan, buildkit.BuildWithBuildkitClientOptions{
+		ProgressMode: "plain",
+		SecretsHash:  buildkit.GetSecretsHash(env),
+		Secrets:      env.Variables,
+		GitHubToken:  os.Getenv("GITHUB_TOKEN"),
+	})
 }
