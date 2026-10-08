@@ -5,18 +5,28 @@ on:
     tags:
       - "v*"
 
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag
+        required: true
+        type: string
+
 permissions:
   contents: read
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 0
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
           go-version-file: go.mod
@@ -25,7 +35,7 @@ jobs:
       - name: Build standalone binaries
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${RELEASE_TAG#v}"
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
           mkdir -p dist
           for binary in detector builder; do
@@ -42,10 +52,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --draft \
-            --title "DeploPack $GITHUB_REF_NAME" --generate-notes
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
-            gh release edit "$GITHUB_REF_NAME" --draft=false --prerelease --latest=false
+          gh release create "$RELEASE_TAG" dist/* --verify-tag --draft \
+            --title "DeploPack $RELEASE_TAG" --generate-notes
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false
           else
-            gh release edit "$GITHUB_REF_NAME" --draft=false --prerelease=false --latest
+            gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest
           fi
