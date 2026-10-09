@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "preserveTree": true,
+  "contentBasenames": [
+    ".dockerignore",
+    "railpack.json",
+    "Procfile",
+    "Staticfile",
+    "start.sh",
+    "package.json",
+    "package.json5",
+    "pnpm-workspace.yaml",
+    "pnpm-lock.yaml",
+    "package-lock.json",
+    "yarn.lock",
+    "bun.lock",
+    "bun.lockb",
+    ".yarnrc.yml",
+    ".yarnrc.yaml",
+    "main.ts",
+    "main.js",
+    "main.mjs",
+    "main.mts",
+    "next.config.js",
+    "next.config.mjs",
+    "next.config.ts",
+    "vite.config.js",
+    "vite.config.ts",
+    "astro.config.mjs",
+    "astro.config.ts",
+    "react-router.config.js",
+    "react-router.config.ts",
+    "angular.json",
+    "app.json",
+    "requirements.txt",
+    "Pipfile",
+    "Pipfile.lock",
+    "poetry.lock",
+    "uv.lock",
+    "pdm.lock",
+    "runtime.txt",
+    "Gemfile",
+    "Gemfile.lock",
+    "go.mod",
+    "go.work",
+    "global.json",
+    ".tool-versions",
+    ".python-version",
+    ".python-versions",
+    ".node-version",
+    ".nvmrc",
+    ".ruby-version",
+    ".go-version",
+    ".java-version",
+    ".sdkmanrc",
+    ".exenv-version",
+    ".deno-version",
+    ".bun-version",
+    ".yvmrc",
+    ".elixir-version",
+    ".erlang-version",
+    "rust-toolchain"
+  ],
+  "contentPatterns": [
+    "*.toml",
+    "*.lock",
+    "*.csproj",
+    "*.py"
+  ],
+  "contentPathSuffixes": [
+    "config/application.rb"
+  ],
+  "fullCheckoutBasenames": [
+    ".tool-versions"
+  ],
+  "fullCheckoutPatterns": [
+    "mise*.toml",
+    ".mise*.toml"
+  ],
+  "fullCheckoutDirectories": [
+    "mise",
+    ".mise"
+  ],
+  "pathEnvironment": [
+    "DEPLOPACK_CONFIG_FILE",
+    "DEPLOPACK_SHELL_SCRIPT"
+  ]
+}

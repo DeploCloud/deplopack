@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,9 +13,16 @@ import (
 
 var version = "dev"
 
+//go:embed checkout-spec.json
+var checkoutSpec string
+
 func main() {
 	if len(os.Args) == 2 && os.Args[1] == "--version" {
 		fmt.Println(version)
+		return
+	}
+	if len(os.Args) == 2 && os.Args[1] == "--checkout-spec" {
+		fmt.Print(checkoutSpec)
 		return
 	}
 	if err := run(); err != nil {

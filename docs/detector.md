@@ -21,7 +21,9 @@ environment ordering. Original `RAILPACK_*` names remain supported.
 `DEPLOPACK_PROVIDER`, `BUILDKIT_HOST`, `DOCKER_HOST` and `DOCKER_CONFIG` are excluded
 from the project environment. The Agent must construct the child environment explicitly
 instead of inheriting unrelated host variables.
-Arguments are not accepted except `--version`, which prints the binary version.
+Arguments are not accepted except `--version`, which prints the binary version,
+and `--checkout-spec`, which prints the versioned JSON checkout specification
+without inspecting the current directory or initializing Mise.
 
 The detector calls every provider's existing `Detect` method, in upstream order.
 It does not call `Initialize`, `Plan` or `GenerateBuildPlan`, install Mise, resolve
