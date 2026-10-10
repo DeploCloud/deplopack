@@ -65,6 +65,7 @@ type BuildWithBuildkitClientOptions struct {
 
 	// Nil preserves the CLI's stdout progress display.
 	ProgressWriter io.Writer
+	HideRunHint    bool
 }
 
 func BuildWithBuildkitClient(appDir string, plan *plan.BuildPlan, opts BuildWithBuildkitClientOptions) error {
@@ -274,6 +275,10 @@ func BuildWithBuildkitClient(appDir string, plan *plan.BuildPlan, opts BuildWith
 
 	// output nice build output
 	buildDuration := time.Since(startTime)
+	if opts.HideRunHint {
+		fmt.Printf("Successfully built image in %.2fs\n", buildDuration.Seconds())
+		return nil
+	}
 	buildOutput := fmt.Sprintf("Successfully built image in %.2fs", buildDuration.Seconds())
 	if opts.OutputDir != "" {
 		buildOutput += fmt.Sprintf("\n\nSaved to:\n%s", core.FormatHighlight(opts.OutputDir))

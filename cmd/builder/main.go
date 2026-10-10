@@ -61,6 +61,7 @@ func run() error {
 	buildErr := buildkit.BuildWithBuildkitClient(source.Source, result.Plan, buildkit.BuildWithBuildkitClientOptions{
 		ProgressMode:   "plain",
 		ProgressWriter: output,
+		HideRunHint:    true,
 		SecretsHash:    buildkit.GetSecretsHash(env),
 		Secrets:        env.Variables,
 		GitHubToken:    os.Getenv("GITHUB_TOKEN"),
