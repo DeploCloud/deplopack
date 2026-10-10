@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -9,9 +8,7 @@ import (
 	"github.com/railwayapp/railpack/buildkit"
 	"github.com/railwayapp/railpack/core"
 	"github.com/railwayapp/railpack/core/app"
-	"github.com/railwayapp/railpack/core/config"
 	"github.com/railwayapp/railpack/core/mise"
-	"github.com/railwayapp/railpack/core/plan"
 	"github.com/railwayapp/railpack/internal/deplopack"
 )
 
@@ -53,26 +50,24 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	core.PrettyPrintBuildResult(result, core.PrintOptions{Version: version})
+	fmt.Print(strings.Replace(core.FormatBuildResult(result, core.PrintOptions{Version: version}), "Railpack "+version, "DeploPack "+version, 1))
 	if !result.Success {
 		return fmt.Errorf("build planning failed")
 	}
-	serialized, err := json.MarshalIndent(struct {
-		Schema string `json:"$schema"`
-		*plan.BuildPlan
-	}{Schema: config.SchemaUrl, BuildPlan: result.Plan}, "", "  ")
-	if err != nil {
-		return err
-	}
-	core.PrettyPrintSectionHeader(os.Stdout, "Generated railpack-plan.json")
-	core.PrettyPrintJSON(os.Stdout, serialized)
 	if err := buildkit.ValidateSecrets(result.Plan, env); err != nil {
 		return err
 	}
-	return buildkit.BuildWithBuildkitClient(source.Source, result.Plan, buildkit.BuildWithBuildkitClientOptions{
-		ProgressMode: "plain",
-		SecretsHash:  buildkit.GetSecretsHash(env),
-		Secrets:      env.Variables,
-		GitHubToken:  os.Getenv("GITHUB_TOKEN"),
+	output := &progressWriter{output: os.Stdout}
+	buildErr := buildkit.BuildWithBuildkitClient(source.Source, result.Plan, buildkit.BuildWithBuildkitClientOptions{
+		ProgressMode:   "plain",
+		ProgressWriter: output,
+		SecretsHash:    buildkit.GetSecretsHash(env),
+		Secrets:        env.Variables,
+		GitHubToken:    os.Getenv("GITHUB_TOKEN"),
 	})
+	flushErr := output.Flush()
+	if buildErr != nil {
+		return buildErr
+	}
+	return flushErr
 }

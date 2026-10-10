@@ -62,6 +62,9 @@ type BuildWithBuildkitClientOptions struct {
 	CacheKey     string
 	GitHubToken  string
 	NoCache      bool
+
+	// Nil preserves the CLI's stdout progress display.
+	ProgressWriter io.Writer
 }
 
 func BuildWithBuildkitClient(appDir string, plan *plan.BuildPlan, opts BuildWithBuildkitClientOptions) error {
@@ -170,7 +173,11 @@ func BuildWithBuildkitClient(appDir string, plan *plan.BuildPlan, opts BuildWith
 			progressMode = progressui.TtyMode
 		}
 
-		display, err := progressui.NewDisplay(os.Stdout, progressMode)
+		output := opts.ProgressWriter
+		if output == nil {
+			output = os.Stdout
+		}
+		display, err := progressui.NewDisplay(output, progressMode)
 		if err != nil {
 			log.Error("failed to create progress display", "error", err)
 		}

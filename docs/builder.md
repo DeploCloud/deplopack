@@ -43,7 +43,10 @@ secrets. The Agent must construct the child
 environment explicitly instead of inheriting unrelated host credentials.
 `GITHUB_TOKEN` retains upstream behavior for authenticated tool downloads.
 
-The builder always prints the generated JSON plan and produces an image loaded
+The builder prints a readable package, command and startup summary, followed by
+BuildKit progress; it does not print the plan JSON. Its banner and internal progress
+prefixes identify DeploPack, while upstream image names, URLs and configuration
+variables retain their original names. It produces an image loaded
 into Docker. The image name defaults to the project directory name in lowercase;
 the target platform defaults to Linux with the host architecture.
 The pipeline requires Docker CLI to load the resulting image. Docker authentication
