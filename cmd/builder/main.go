@@ -50,7 +50,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	fmt.Print(strings.Replace(core.FormatBuildResult(result, core.PrintOptions{Version: version}), "Railpack "+version, "DeploPack "+version, 1))
+	core.PrettyPrintBuildResult(result, core.PrintOptions{Version: version, Name: "DeploPack"})
 	if !result.Success {
 		return fmt.Errorf("build planning failed")
 	}

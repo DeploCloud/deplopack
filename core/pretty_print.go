@@ -122,6 +122,7 @@ var (
 type PrintOptions struct {
 	Metadata bool
 	Version  string
+	Name     string
 }
 
 func PrettyPrintBuildResult(buildResult *BuildResult, options ...PrintOptions) {
@@ -157,11 +158,14 @@ func FormatBuildResult(br *BuildResult, options ...PrintOptions) string {
 	if len(options) > 0 {
 		opts = options[0]
 	}
+	if opts.Name == "" {
+		opts.Name = "Railpack"
+	}
 	var output strings.Builder
 
-	formatHeader(&output, opts.Version)
+	formatHeader(&output, opts.Name, opts.Version)
 	formatLogs(&output, br.Logs)
-	formatPackages(&output, br.ResolvedPackages)
+	formatPackages(&output, br.ResolvedPackages, opts.Name)
 	formatSteps(&output, br)
 	formatDeploy(&output, br)
 	formatMetadata(&output, br.Metadata, opts.Metadata)
@@ -170,8 +174,8 @@ func FormatBuildResult(br *BuildResult, options ...PrintOptions) string {
 	return output.String()
 }
 
-func formatHeader(output *strings.Builder, version string) {
-	header := fmt.Sprintf("Railpack %s", version)
+func formatHeader(output *strings.Builder, name, version string) {
+	header := fmt.Sprintf("%s %s", name, version)
 	output.WriteString(headerStyle.Render(header))
 	output.WriteString("\n")
 }
@@ -218,7 +222,7 @@ func formatLogs(output *strings.Builder, logs []logger.Msg) {
 	}
 }
 
-func formatPackages(output *strings.Builder, packages map[string]*resolver.ResolvedPackage) {
+func formatPackages(output *strings.Builder, packages map[string]*resolver.ResolvedPackage, productName string) {
 	if len(packages) == 0 {
 		return
 	}
@@ -246,7 +250,7 @@ func formatPackages(output *strings.Builder, packages map[string]*resolver.Resol
 			version = *pkg.ResolvedVersion
 		}
 		version = localVersionStyle.Render(version)
-		source := sourceStyle.Render(formatSource(pkg))
+		source := sourceStyle.Render(formatSource(pkg, productName))
 		fmt.Fprintf(output, "%s%s%s%s%s", name, separator, version, separator, source)
 		output.WriteString("\n")
 	}
@@ -353,9 +357,13 @@ func isSkippableCommand(cmd string) bool {
 	return slices.Contains(skippableCommands, cmd)
 }
 
-func formatSource(pkg *resolver.ResolvedPackage) string {
-	if pkg.RequestedVersion != nil {
-		return fmt.Sprintf("%s (%s)", pkg.Source, *pkg.RequestedVersion)
+func formatSource(pkg *resolver.ResolvedPackage, name string) string {
+	source := pkg.Source
+	if source == resolver.DefaultSource {
+		source = strings.ToLower(name) + " default"
 	}
-	return pkg.Source
+	if pkg.RequestedVersion != nil {
+		return fmt.Sprintf("%s (%s)", source, *pkg.RequestedVersion)
+	}
+	return source
 }
