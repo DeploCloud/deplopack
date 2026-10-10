@@ -44,7 +44,7 @@ func (p *StaticfileProvider) Inspect(ctx *generate.GenerateContext) error {
 }
 
 func (p *StaticfileProvider) startCommand() string {
-	return fmt.Sprintf("caddy run --config %s --adapter caddyfile 2>&1", CaddyfilePath)
+	return fmt.Sprintf("exec caddy run --config %s --adapter caddyfile 2>&1", CaddyfilePath)
 }
 
 func (p *StaticfileProvider) Detect(ctx *generate.GenerateContext) (bool, error) {

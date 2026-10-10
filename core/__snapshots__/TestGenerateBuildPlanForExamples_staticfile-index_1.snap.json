@@ -17,7 +17,7 @@
     "step": "build"
    }
   ],
-  "startCommand": "caddy run --config Caddyfile --adapter caddyfile 2\u003e\u00261",
+  "startCommand": "exec caddy run --config Caddyfile --adapter caddyfile 2\u003e\u00261",
   "variables": {
    "RAILPACK_VERSION": "dev"
   }

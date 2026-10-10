@@ -14,7 +14,7 @@ import (
 const (
 	DefaultCaddyfilePath   = "/Caddyfile"
 	OUTPUT_DIR_VAR         = "SPA_OUTPUT_DIR"
-	defaultSPAStartCommand = "caddy run --config /Caddyfile --adapter caddyfile 2>&1"
+	defaultSPAStartCommand = "exec caddy run --config /Caddyfile --adapter caddyfile 2>&1"
 )
 
 //go:embed Caddyfile.template
