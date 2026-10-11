@@ -32,6 +32,9 @@ func main() {
 }
 
 func run() error {
+	if len(os.Args) == 2 && os.Args[1] == "--dependency-spec" {
+		return deplopack.WriteDependencySpec(os.Stdout)
+	}
 	if len(os.Args) != 1 {
 		return fmt.Errorf("detector accepts configuration through environment variables only")
 	}

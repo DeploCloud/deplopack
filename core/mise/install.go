@@ -67,6 +67,16 @@ func getAssetName(goos, goarch string) (string, error) {
 	return fmt.Sprintf("mise-v%s-%s.%s", Version, platform, extension), nil
 }
 
+// Describes the pinned Linux asset without downloading or executing Mise.
+func LinuxAsset(arch string) (string, string, error) {
+	asset, err := getAssetName("linux", arch)
+	if err != nil {
+		return "", "", err
+	}
+	base := fmt.Sprintf("%s/v%s/", githubReleaseBase, Version)
+	return asset, base, nil
+}
+
 // getBinaryPath returns the full path to the binary
 func getBinaryPath(cacheDir string) string {
 	return filepath.Join(cacheDir, getBinaryName())
