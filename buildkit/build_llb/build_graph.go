@@ -21,12 +21,13 @@ import (
 const githubTokenEnvVar = "GITHUB_TOKEN"
 
 type BuildGraph struct {
-	graph      *graph.Graph
-	CacheStore *BuildKitCacheStore
-	Plan       *plan.BuildPlan
-	Platform   *specs.Platform
-	LocalState *llb.State
-	NoCache    bool
+	ImageSources map[string]llb.State
+	graph        *graph.Graph
+	CacheStore   *BuildKitCacheStore
+	Plan         *plan.BuildPlan
+	Platform     *specs.Platform
+	LocalState   *llb.State
+	NoCache      bool
 
 	githubToken     string
 	secretsFile     *llb.State
@@ -102,6 +103,9 @@ func NewBuildGraph(plan *plan.BuildPlan, localState *llb.State, cacheStore *Buil
 
 // generate the LLB state for the build graph
 func (g *BuildGraph) GenerateLLB() (*BuildGraphOutput, error) {
+	if local, ok := g.ImageSources["alpine:latest"]; ok {
+		g.usedSecretsBase = &local
+	}
 	// Get processing order using topological sort
 	order, err := g.graph.ComputeProcessingOrder()
 	if err != nil {
@@ -309,7 +313,7 @@ func (g *BuildGraph) convertPathCommandToLLB(node *StepNode, cmd plan.PathComman
 func (g *BuildGraph) convertCopyCommandToLLB(cmd plan.CopyCommand, state llb.State) (llb.State, error) {
 	var src llb.State
 	if cmd.Image != "" {
-		src = llb.Image(cmd.Image, llb.Platform(*g.Platform))
+		src = g.imageState(cmd.Image)
 	} else {
 		src = *g.LocalState
 	}

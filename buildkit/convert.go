@@ -17,6 +17,7 @@ import (
 )
 
 type ConvertPlanOptions struct {
+	ImageSources  map[string]llb.State
 	BuildPlatform specs.Platform
 
 	// Hash of all the secrets values that can be used to invalidate the layer cache when a secret changes
@@ -59,6 +60,7 @@ func ConvertPlanToLLB(plan *p.BuildPlan, opts ConvertPlanOptions) (*llb.State, *
 		return nil, nil, err
 	}
 
+	graph.ImageSources = opts.ImageSources
 	graphOutput, err := graph.GenerateLLB()
 	if err != nil {
 		return nil, nil, err

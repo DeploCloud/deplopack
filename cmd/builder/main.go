@@ -41,10 +41,10 @@ func run() error {
 		return fmt.Errorf("DEPLOPACK_PROVIDER is required")
 	}
 
-	var cacheImports []string
-	if value := os.Getenv("DEPLOPACK_CACHE_IMPORTS"); value != "" {
-		if err := json.Unmarshal([]byte(value), &cacheImports); err != nil {
-			return fmt.Errorf("invalid dependency cache imports: %w", err)
+	var images map[string]string
+	if value := os.Getenv("DEPLOPACK_OCI_IMAGES"); value != "" {
+		if err := json.Unmarshal([]byte(value), &images); err != nil {
+			return fmt.Errorf("invalid local OCI images: %w", err)
 		}
 	}
 
@@ -70,7 +70,7 @@ func run() error {
 	}
 	output := &progressWriter{output: os.Stdout}
 	buildErr := buildkit.BuildWithBuildkitClient(source.Source, result.Plan, buildkit.BuildWithBuildkitClientOptions{
-		ImportCache:    cacheImports,
+		OCIImages:      images,
 		ProgressMode:   "plain",
 		ProgressWriter: output,
 		HideRunHint:    true,

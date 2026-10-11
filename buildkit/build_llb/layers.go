@@ -17,7 +17,7 @@ func (g *BuildGraph) GetStateForLayer(layer plan.Layer) llb.State {
 	var state llb.State
 
 	if layer.Image != "" {
-		state = llb.Image(layer.Image, llb.Platform(*g.Platform))
+		state = g.imageState(layer.Image)
 	} else if layer.Local {
 		state = *g.LocalState
 	} else if layer.Step != "" {
@@ -274,4 +274,11 @@ func resolvePaths(include string, isLocal bool) (srcPath, destPath string) {
 	default:
 		return filepath.Join("/app", include), filepath.Join("/app", include)
 	}
+}
+
+func (g *BuildGraph) imageState(ref string) llb.State {
+	if state, ok := g.ImageSources[ref]; ok {
+		return state
+	}
+	return llb.Image(ref, llb.Platform(*g.Platform))
 }

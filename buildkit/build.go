@@ -50,6 +50,7 @@ Use 'railpack --verbose' to view more error details`
 )
 
 type BuildWithBuildkitClientOptions struct {
+	OCIImages    map[string]string
 	ImageName    string
 	DumpLLB      bool
 	OutputDir    string
@@ -103,7 +104,12 @@ func BuildWithBuildkitClient(appDir string, plan *plan.BuildPlan, opts BuildWith
 		return fmt.Errorf("failed to parse platform '%s': %w", opts.Platform, err)
 	}
 
+	imageSources, imageStores, err := loadOCIImages(opts.OCIImages, buildPlatform)
+	if err != nil {
+		return err
+	}
 	llbState, image, err := ConvertPlanToLLB(plan, ConvertPlanOptions{
+		ImageSources:  imageSources,
 		BuildPlatform: buildPlatform,
 		SecretsHash:   opts.SecretsHash,
 		CacheKey:      opts.CacheKey,
@@ -213,6 +219,7 @@ func BuildWithBuildkitClient(appDir string, plan *plan.BuildPlan, opts BuildWith
 	}
 
 	solveOpts := client.SolveOpt{
+		OCIStores: imageStores,
 		LocalMounts: map[string]fsutil.FS{
 			"context": appFS,
 		},
