@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -40,6 +41,13 @@ func run() error {
 		return fmt.Errorf("DEPLOPACK_PROVIDER is required")
 	}
 
+	var cacheImports []string
+	if value := os.Getenv("DEPLOPACK_CACHE_IMPORTS"); value != "" {
+		if err := json.Unmarshal([]byte(value), &cacheImports); err != nil {
+			return fmt.Errorf("invalid dependency cache imports: %w", err)
+		}
+	}
+
 	source, err := app.NewApp(".")
 	if err != nil {
 		return err
@@ -62,6 +70,7 @@ func run() error {
 	}
 	output := &progressWriter{output: os.Stdout}
 	buildErr := buildkit.BuildWithBuildkitClient(source.Source, result.Plan, buildkit.BuildWithBuildkitClientOptions{
+		ImportCache:    cacheImports,
 		ProgressMode:   "plain",
 		ProgressWriter: output,
 		HideRunHint:    true,
