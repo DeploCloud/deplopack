@@ -44,6 +44,7 @@ var inputDefinitions = []inputDefinition{
 	{"", "DEPLOY_APT_PACKAGES", "Runtime apt packages", "Space-separated apt packages to include in the final image.", false},
 	{"", "DISABLE_CACHES", "Disabled caches", "Space-separated cache names, or * to disable all caches.", false},
 	{"node php ruby elixir", "NODE_VERSION", "Node version", "Node version or version constraint; automatic resolution may also use Mise.", false},
+	{"node php ruby elixir", "PACKAGE_MANAGER_VERSION", "Package manager version", "Exact version of the detected package manager; overrides project declarations.", false},
 	{"node php ruby elixir", "BUN_VERSION", "Bun version", "Bun version when Bun is used by the project.", false},
 	{"node php ruby elixir", "NODE_NPM_INSTALL", "npm install command", "Custom install command when the selected package manager is npm.", false},
 	{"node php ruby elixir", "NODE_PRUNE_CMD", "Dependency prune command", "Override the command used to prune Node dependencies.", false},
@@ -83,9 +84,22 @@ func inputsFor(provider string, ctx *generate.GenerateContext, defaults map[stri
 		if definition.providers != "" && !slices.Contains(strings.Fields(definition.providers), provider) {
 			continue
 		}
+		manager := ctx.Metadata.Get("nodePackageManager")
+		if definition.name == "PACKAGE_MANAGER_VERSION" && manager == "" {
+			continue
+		}
+		if definition.name == "BUN_VERSION" && (manager == "bun" || ctx.Resolver.Get("bun") == nil) {
+			continue
+		}
+		if definition.name == "NODE_NPM_INSTALL" && manager != "npm" {
+			continue
+		}
 		input := Input{
 			Type: "text", Label: definition.label, Env: "DEPLOPACK_" + definition.name,
 			Description: definition.description, Placeholder: "Automatic",
+		}
+		if definition.name == "PACKAGE_MANAGER_VERSION" && manager == "bun" {
+			input.Label = "Bun version"
 		}
 		defaultValue := defaults[definition.name]
 		if definition.boolean {
@@ -215,6 +229,20 @@ func localDefaults(ctx *generate.GenerateContext, rootDir string, versions map[s
 				defaults[name] = pkg.Version
 			}
 		}
+	}
+	manager := ctx.Metadata.Get("nodePackageManager")
+	tool := manager
+	if manager == "yarn1" || manager == "yarnberry" {
+		tool = "yarn"
+	}
+	if pkg := versions[tool]; pkg != nil {
+		defaults["PACKAGE_MANAGER_VERSION"] = pkg.Version
+	}
+	if pkg := ctx.Resolver.Get(tool); pkg != nil {
+		defaults["PACKAGE_MANAGER_VERSION"] = pkg.Version
+	}
+	if version := ctx.Metadata.Get("nodePackageManagerVersion"); version != "" {
+		defaults["PACKAGE_MANAGER_VERSION"] = version
 	}
 	// Java does not apply Mise declarations when choosing its JDK.
 	if ctx.Metadata.Get("javaPackageManager") == "maven" {

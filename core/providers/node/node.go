@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	semver "github.com/Masterminds/semver/v3"
 	"github.com/charmbracelet/log"
 	"github.com/railwayapp/railpack/core/app"
 	"github.com/railwayapp/railpack/core/generate"
@@ -81,9 +82,10 @@ func findPackageManifest(app *app.App) string {
 }
 
 type NodeProvider struct {
-	packageJson    *PackageJson
-	packageManager PackageManager
-	workspace      *Workspace
+	packageJson           *PackageJson
+	packageManager        PackageManager
+	workspace             *Workspace
+	packageManagerVersion string
 }
 
 func (p *NodeProvider) Name() string {
@@ -98,6 +100,9 @@ func (p *NodeProvider) Initialize(ctx *generate.GenerateContext) error {
 	p.packageJson = packageJson
 
 	p.packageManager = p.getPackageManager(ctx)
+	if err := p.setPackageManagerVersion(ctx); err != nil {
+		return err
+	}
 
 	workspace, err := NewWorkspace(ctx.App)
 	if err != nil {
@@ -105,6 +110,27 @@ func (p *NodeProvider) Initialize(ctx *generate.GenerateContext) error {
 	}
 	p.workspace = workspace
 
+	return nil
+}
+
+// An explicit package-manager override must also select the matching Yarn command family.
+func (p *NodeProvider) setPackageManagerVersion(ctx *generate.GenerateContext) error {
+	value, _ := ctx.Env.GetConfigVariable("PACKAGE_MANAGER_VERSION")
+	p.packageManagerVersion = value
+	if value == "" {
+		return nil
+	}
+	version, err := semver.StrictNewVersion(strings.TrimPrefix(value, "v"))
+	if err != nil {
+		return fmt.Errorf("PACKAGE_MANAGER_VERSION must be an exact semantic version: %w", err)
+	}
+	p.packageManagerVersion = version.String()
+	if p.packageManager == PackageManagerYarn1 || p.packageManager == PackageManagerYarnBerry {
+		p.packageManager = PackageManagerYarn1
+		if version.Major() >= 2 {
+			p.packageManager = PackageManagerYarnBerry
+		}
+	}
 	return nil
 }
 
@@ -184,10 +210,9 @@ func (p *NodeProvider) Plan(ctx *generate.GenerateContext) error {
 
 	if p.usesCorepack() {
 		buildIncludeDirs = append(buildIncludeDirs, COREPACK_HOME)
-
-		// installing corepack results in additional global node package and more symlinks (corepack prepare)
-		// these paths are already included via the packages:mise step, but since they are mutated when corepack is used
-		// we must include them again in order for pnpm and other binaries to be available in the final runtime image.
+	}
+	if p.usesCorepack() || (p.packageManager == PackageManagerNpm && p.packageManagerVersion != "") {
+		// Global npm/Corepack installs mutate Mise directories needed in the runtime image.
 		buildIncludeDirs = append(buildIncludeDirs, "/mise/installs")
 		buildIncludeDirs = append(buildIncludeDirs, "/mise/shims")
 	}
@@ -391,7 +416,15 @@ func (p *NodeProvider) InstallNodeDeps(ctx *generate.GenerateContext, install *g
 	}
 
 	if p.usesCorepack() {
+		corepackCommand := "npm i -g corepack@latest && corepack enable && corepack prepare --activate"
+		if p.packageManagerVersion != "" {
+			corepackCommand = fmt.Sprintf("npm i -g corepack@latest && corepack enable && corepack prepare %s@%s --activate", p.packageManager.Name(), p.packageManagerVersion)
+			install.AddVariables(map[string]string{"COREPACK_ENABLE_PROJECT_SPEC": "0"})
+		}
 		pmName, pmVersion := p.packageJson.GetPackageManagerInfo()
+		if p.packageManagerVersion != "" {
+			pmName, pmVersion = p.packageManager.Name(), p.packageManagerVersion
+		}
 		install.AddVariables(map[string]string{
 			"COREPACK_HOME": COREPACK_HOME,
 		})
@@ -402,8 +435,11 @@ func (p *NodeProvider) InstallNodeDeps(ctx *generate.GenerateContext, install *g
 			// corepack will detect the package manager version from package.json, safe to assume the user is properly
 			// specifying the version they want there, no need to check other version specifications.
 			// corepack *used* to be bundled with node, but as of v25 it's not, so we install it explicitly
-			plan.NewExecShellCommand("npm i -g corepack@latest && corepack enable && corepack prepare --activate"),
+			plan.NewExecShellCommand(corepackCommand),
 		})
+	}
+	if p.packageManager == PackageManagerNpm && p.packageManagerVersion != "" {
+		install.AddCommand(plan.NewExecCommand("npm install --global npm@" + p.packageManagerVersion))
 	}
 	install.AddCommands([]plan.Command{
 		// it's possible for a package.json to exist without any dependencies, in which case node_modules is not generated
@@ -493,6 +529,12 @@ func (p *NodeProvider) InstallMisePackages(ctx *generate.GenerateContext, miseSt
 	if len(misePackages) > 0 {
 		miseStep.UseMiseVersions(ctx, misePackages)
 	}
+	if p.packageManagerVersion != "" {
+		if tool := p.packageManager.misePackageName(); tool != "" {
+			pkg := miseStep.Default(tool, p.packageManagerVersion)
+			miseStep.Version(pkg, p.packageManagerVersion, "PACKAGE_MANAGER_VERSION")
+		}
+	}
 }
 
 func (p *NodeProvider) GetNodeEnvVars(ctx *generate.GenerateContext) map[string]string {
@@ -506,6 +548,20 @@ func (p *NodeProvider) GetNodeEnvVars(ctx *generate.GenerateContext) map[string]
 		"CI":                       "true",
 	}
 
+	if p.packageManagerVersion != "" && p.packageManager == PackageManagerPnpm {
+		// pnpm must not replace Mise's overridden version with the repository's pin.
+		version, _ := semver.StrictNewVersion(p.packageManagerVersion)
+		if version.Major() >= 11 {
+			envVars["pnpm_config_pm_on_fail"] = "ignore"
+		} else {
+			envVars["npm_config_manage_package_manager_versions"] = "false"
+			envVars["npm_config_package_manager_strict_version"] = "false"
+		}
+	}
+	if p.packageManagerVersion != "" && (p.packageManager == PackageManagerYarn1 || p.packageManager == PackageManagerYarnBerry) {
+		// A repository-local yarnPath must not bypass the explicit version override.
+		envVars["YARN_IGNORE_PATH"] = "1"
+	}
 	if p.packageManager == PackageManagerYarn1 {
 		envVars["YARN_PRODUCTION"] = "false"
 	}
@@ -532,7 +588,8 @@ func (p *NodeProvider) usesCorepack() bool {
 	return p.packageJson != nil &&
 		p.packageJson.PackageManager != nil &&
 		p.packageManager != PackageManagerBun &&
-		p.packageManager != PackageManagerPnpm
+		p.packageManager != PackageManagerPnpm &&
+		(p.packageManager != PackageManagerNpm || p.packageManagerVersion == "")
 }
 
 func (p *NodeProvider) usesPuppeteer() bool {
@@ -678,6 +735,9 @@ func (p *NodeProvider) getScripts(packageJson *PackageJson, name string) string 
 func (p *NodeProvider) SetNodeMetadata(ctx *generate.GenerateContext) {
 	ctx.Metadata.Set("nodeRuntime", p.getRuntime(ctx))
 	ctx.Metadata.Set("nodePackageManager", string(p.packageManager))
+	if p.packageManagerVersion != "" {
+		ctx.Metadata.Set("nodePackageManagerVersion", p.packageManagerVersion)
+	}
 	ctx.Metadata.SetBool("nodeIsSPA", p.isSPA(ctx))
 	ctx.Metadata.SetBool("nodeUsesCorepack", p.usesCorepack())
 }
@@ -694,6 +754,9 @@ func (p *NodeProvider) Inspect(ctx *generate.GenerateContext) error {
 		return err
 	}
 	p.packageManager = p.getPackageManager(ctx)
+	if err := p.setPackageManagerVersion(ctx); err != nil {
+		return err
+	}
 	p.SetNodeMetadata(ctx)
 	p.InstallMisePackages(ctx, ctx.GetMiseStepBuilder())
 	for name, key := range map[string]string{"node": "nodeVersionConstraint", "bun": "bunVersionConstraint"} {
