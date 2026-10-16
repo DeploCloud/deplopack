@@ -11,6 +11,10 @@ on:
         description: Existing release tag
         required: true
         type: string
+      source_ref:
+        description: Source commit to build (defaults to release tag)
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -26,7 +30,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 0
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ inputs.source_ref || inputs.tag || github.ref }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
           go-version-file: go.mod
@@ -52,10 +56,25 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh release create "$RELEASE_TAG" dist/* --verify-tag --draft \
-            --title "DeploPack $RELEASE_TAG" --generate-notes
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            mkdir -p previous-release
+            gh release download "$RELEASE_TAG" --dir previous-release
+            gh release upload "$RELEASE_TAG" dist/deplopack-* --clobber
+            gh release upload "$RELEASE_TAG" dist/checksums.txt --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/* --verify-tag --draft \
+              --title "DeploPack $RELEASE_TAG" --generate-notes
+          fi
           if [[ "$RELEASE_TAG" == *-* ]]; then
             gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false
           else
             gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest
           fi
+
+      - name: Preserve previous release assets
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: previous-release-assets
+          path: previous-release/
+          if-no-files-found: ignore
