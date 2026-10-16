@@ -34,6 +34,11 @@ Follow these instructions carefully when writing code:
   pnpm-lock.yaml, etc.). Always use the respective package manager to generate
   or update lockfiles. Manual edits can result in invalid checksums and broken
   builds.
+- When setting a framework's environment variables, use the exact values that
+  framework documents and add a 1-2 line comment saying why those values are
+  required. Put reference URLs on their own comment line. Do not reuse another
+  framework's spellings (`production` vs `prod`, `false` vs `0`): a lookalike
+  value can select a different mode or stay truthy.
 
 # Workflow
 
@@ -77,6 +82,7 @@ There are normal unit tests, snapshot tests, and integration tests. The integrat
 ## Unit tests
 
 * Do not test log output.
+* Name a test after the behavior it checks. Do not use a generic name such as `TestZig` when the function checks detection, a start command, or another specific outcome.
 
 # Documentation
 

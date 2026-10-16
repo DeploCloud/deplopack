@@ -339,8 +339,15 @@ func (p PackageManager) GetInstallFolder(ctx *generate.GenerateContext) []string
 	switch p {
 	case PackageManagerYarnBerry:
 		installFolders := []string{"/app/.yarn", p.getYarnBerryGlobalFolder(ctx)}
-		if p.getYarnBerryNodeLinker(ctx) == "node-modules" {
+		// https://yarnpkg.com/configuration/yarnrc#nodeLinker
+		linker := p.getYarnBerryNodeLinker(ctx)
+		switch linker {
+		case "pnpm", "node-modules":
 			installFolders = append(installFolders, "/app/node_modules")
+		case "pnp":
+			// packages are loaded from the .yarn zip cache
+		default:
+			ctx.Logger.LogWarn("Unknown yarn nodeLinker '%s', not including node_modules", linker)
 		}
 		return installFolders
 	default:
@@ -351,7 +358,7 @@ func (p PackageManager) GetInstallFolder(ctx *generate.GenerateContext) []string
 // SupportingInstallFiles returns a list of files that are needed to install dependencies
 func (p PackageManager) SupportingInstallFiles(ctx *generate.GenerateContext) []string {
 	// Use brace expansion for single filesystem traversal instead of 16 separate globs
-	pattern := "**/{package.json,package.json5,package-lock.json,pnpm-workspace.yaml,yarn.lock,pnpm-lock.yaml,bun.lockb,bun.lock,bunfig.toml,.yarn,.pnp.*,.yarnrc.yml,.npmrc,.node-version,.nvmrc,patches,.pnpm-patches,prisma}"
+	pattern := "**/{package.json,package.json5,package-lock.json,pnpm-workspace.yaml,yarn.lock,pnpm-lock.yaml,bun.lockb,bun.lock,bunfig.toml,turbo.json,turbo.jsonc,.yarn,.pnp.*,.yarnrc.yml,.npmrc,.node-version,.nvmrc,patches,.pnpm-patches,prisma}"
 
 	var allFiles []string
 
