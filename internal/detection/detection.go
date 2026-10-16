@@ -120,8 +120,30 @@ func Analyze(source *app.App, env *app.Environment, options *core.GenerateBuildP
 		}
 	}
 	// File detections stay outside the upstream language registry.
-	if source.HasFile("Dockerfile") {
-		result.Detections = append(result.Detections, Detection{Type: "dockerfile", Path: "Dockerfile"})
+	dockerfiles, err := source.FindAllFiles("**/{[Dd]ockerfile*,DOCKERFILE*,[Cc]ontainerfile*,CONTAINERFILE*,*.[Dd]ockerfile,*.DOCKERFILE,*.[Cc]ontainerfile,*.CONTAINERFILE}")
+	if err != nil {
+		return result, fmt.Errorf("find Dockerfiles: %w", err)
+	}
+	slices.SortFunc(dockerfiles, func(a, b string) int {
+		if order := cmp.Compare(strings.Count(a, "/"), strings.Count(b, "/")); order != 0 {
+			return order
+		}
+		if order := cmp.Compare(len(filepath.Ext(a)), len(filepath.Ext(b))); order != 0 {
+			return order
+		}
+		return strings.Compare(a, b)
+	})
+	for _, file := range slices.Compact(dockerfiles) {
+		name := strings.ToLower(filepath.Base(file))
+		// Ignore companion files and templates that require preprocessing.
+		if slices.Contains([]string{".dockerignore", ".in", ".tmpl", ".template", ".bak", ".orig", ".rej"}, filepath.Ext(name)) {
+			continue
+		}
+		if name == "dockerfile" || name == "containerfile" ||
+			strings.HasPrefix(name, "dockerfile.") || strings.HasPrefix(name, "containerfile.") ||
+			strings.HasSuffix(name, ".dockerfile") || strings.HasSuffix(name, ".containerfile") {
+			result.Detections = append(result.Detections, Detection{Type: "dockerfile", Path: file})
+		}
 	}
 	// Compose files may be excluded from image contexts but still define deployments.
 	composeFiles, err := source.FindAllFiles("**/{compose,docker-compose}{,.*}.{yaml,yml}")
