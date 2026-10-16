@@ -2,8 +2,8 @@ package buildkit
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/railwayapp/railpack/core/app"
 	"github.com/railwayapp/railpack/core/plan"
@@ -21,11 +21,6 @@ func ValidateSecrets(plan *plan.BuildPlan, env *app.Environment) error {
 
 // Preserves upstream cache invalidation when build secret values change.
 func GetSecretsHash(env *app.Environment) string {
-	var secretsValue strings.Builder
-	for _, v := range env.Variables {
-		secretsValue.WriteString(v)
-	}
-	hasher := sha256.New()
-	hasher.Write([]byte(secretsValue.String()))
-	return fmt.Sprintf("%x", hasher.Sum(nil))
+	encoded, _ := json.Marshal(env.Variables)
+	return fmt.Sprintf("%x", sha256.Sum256(encoded))
 }

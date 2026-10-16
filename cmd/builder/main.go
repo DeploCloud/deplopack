@@ -52,7 +52,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	env := deplopack.FromEnviron(os.Environ())
+	env, err := deplopack.BuilderEnvironment(os.Environ())
+	if err != nil {
+		return err
+	}
 	// Call the upstream planner and BuildKit directly without registering CLI commands.
 	result, err := core.GenerateBuildPlan(source, env, &core.GenerateBuildPlanOptions{
 		RailpackVersion: version,
